@@ -216,6 +216,17 @@ body {
   -webkit-box-orient: vertical;
   word-break: break-all;
 }
+/* 收起态：只显示「备注（点击查看）」，不泄露内容 */
+.mb-note.collapsed {
+  cursor: pointer;
+  display: block;
+  -webkit-line-clamp: unset;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: .85;
+}
+.mb-note.collapsed:hover { background: #fff6dc; }
+.mb-note .note-preview { font-weight: 600; letter-spacing: .3px; }
 .mini {
   border: 1px solid var(--border); background: #fff;
   border-radius: 6px; padding: 3px 7px; font-size: 11px;

@@ -13,6 +13,8 @@
     noteId: null,
     selectMode: false,
     selected: new Set(),
+    privacy: false,        // 隐私显示：邮箱地址中间打码
+    noteOpen: new Set(),   // 展开了备注的邮箱 id
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -22,6 +24,7 @@
     scope: $("#list-scope"),
     btnCreate: $("#btn-create"),
     btnImport: $("#btn-import"),
+    btnPrivacy: $("#btn-privacy"),
     chkAutoRenew: $("#create-auto-renew"),
     createLifetime: $("#create-lifetime"),
     currentEmail: $("#current-email"),
@@ -53,6 +56,17 @@
   };
 
   /* ---------------- 工具 ---------------- */
+  // 隐私显示：邮箱地址只留前 5 位和后 5 位，中间用 … 代替
+  function maskEmail(email) {
+    const s = String(email || "");
+    if (s.length <= 10) return s;
+    return `${s.slice(0, 5)}…${s.slice(-5)}`;
+  }
+
+  function displayEmail(email) {
+    return state.privacy ? maskEmail(email) : String(email || "");
+  }
+
   // 有效期档位与中文名（与后端 config.py 保持一致；/api/health 可覆盖）
   const LIFETIME_OPTIONS = ["10m", "30m", "1h", "3h", "6h", "24h", "3d", "7d", "15d", "30d"];
   const LIFETIME_LABELS = {
@@ -196,7 +210,7 @@
             ${state.selectMode
               ? `<input type="checkbox" class="mb-check" ${state.selected.has(mb.id) ? "checked" : ""} tabindex="-1">`
               : ""}
-            <div class="mb-email" title="${esc(mb.email)}">${esc(mb.email)}</div>
+            <div class="mb-email" title="${esc(mb.email)}">${esc(displayEmail(mb.email))}</div>
             <span class="type-badge" title="邮箱类型">T${mb.type || 1}</span>
           </div>
           <div class="mb-sub">
@@ -210,7 +224,12 @@
             <span>创建于 ${relTime(mb.created_at)}</span>
             <span>· ${mb.email_count || 0} 封邮件</span>
           </div>
-          ${mb.note ? `<div class="mb-note" title="${esc(mb.note)}">${esc(mb.note)}</div>` : ""}
+          ${mb.note
+            ? `<div class="mb-note ${state.noteOpen.has(mb.id) ? "" : "collapsed"}"
+                   data-note-id="${mb.id}" title="${state.noteOpen.has(mb.id) ? esc(mb.note) : "点击展开备注"}">
+                 ${state.noteOpen.has(mb.id) ? esc(mb.note) : `<span class="note-preview">📝 备注（点击查看）</span>`}
+               </div>`
+            : ""}
           ${mb.last_error ? `<div class="mb-sub" style="color:#e5484d">${esc(mb.last_error)}</div>` : ""}
           <div class="mb-actions">
             <button class="mini" data-act="copy" title="复制邮箱地址">复制</button>
@@ -303,7 +322,8 @@
       el.groupSelect.innerHTML = `<option>—</option>`;
       return;
     }
-    el.currentEmail.textContent = mb.email;
+    el.currentEmail.textContent = displayEmail(mb.email);
+    el.currentEmail.title = mb.email;
     el.currentMeta.innerHTML = `
       <span>有效期 ${esc(mb.lifetime || "30d")}</span>
       <span>· ${(() => { const m = minutesLeft(mb); return m != null ? (m >= 60 ? `剩余约 ${Math.floor(m / 60)} 小时` : `剩余约 ${m} 分钟`) : `剩余约 ${daysLeft(mb) ?? "—"} 天`; })()}</span>
@@ -475,7 +495,7 @@
     const mb = state.mailboxes.find((m) => m.id === mailboxId);
     if (!mb) return;
     state.noteId = mailboxId;
-    el.noteTarget.textContent = mb.email;
+    el.noteTarget.textContent = displayEmail(mb.email);
     el.noteInput.value = mb.note || "";
     updateNoteCount();
     el.noteModal.hidden = false;
@@ -634,6 +654,36 @@
     el.createLifetime.onchange = () => rememberLifetime(el.createLifetime.value);
   }
 
+  /* 隐私显示开关：打码邮箱地址，选择记在 localStorage */
+  const PRIVACY_KEY = "tm.privacy";
+
+  function applyPrivacyState() {
+    el.btnPrivacy.classList.toggle("active", state.privacy);
+    el.btnPrivacy.textContent = state.privacy ? "隐私显示·开" : "隐私显示";
+    el.btnPrivacy.title = state.privacy
+      ? "已开启：邮箱地址只显示前 5 位和后 5 位，点击关闭"
+      : "开启后邮箱地址只显示前 5 位和后 5 位，中间打码";
+  }
+
+  function restorePrivacy() {
+    try { state.privacy = localStorage.getItem(PRIVACY_KEY) === "1"; } catch (_) {}
+    applyPrivacyState();
+  }
+
+  el.btnPrivacy.onclick = () => {
+    state.privacy = !state.privacy;
+    try { localStorage.setItem(PRIVACY_KEY, state.privacy ? "1" : "0"); } catch (_) {}
+    applyPrivacyState();
+    renderMailboxes();
+    renderHeader();
+    renderGroupsSafe();
+    toast(state.privacy ? "已开启隐私显示" : "已关闭隐私显示");
+  };
+
+  function renderGroupsSafe() {
+    if (typeof TMGroups !== "undefined") TMGroups.render();
+  }
+
   el.btnRefresh.onclick = withBusy(el.btnRefresh, async () => {
     const mb = currentMailbox();
     if (!mb) return;
@@ -691,6 +741,16 @@
     // 批量管理模式：点卡片即勾选/取消，不打开邮箱
     if (state.selectMode) {
       toggleSelect(id);
+      return;
+    }
+
+    // 点备注条：展开/收起（不触发打开邮箱）
+    const noteEl = event.target.closest(".mb-note");
+    if (noteEl) {
+      const nid = Number(noteEl.dataset.noteId);
+      if (state.noteOpen.has(nid)) state.noteOpen.delete(nid);
+      else state.noteOpen.add(nid);
+      renderMailboxes();
       return;
     }
 
@@ -809,6 +869,7 @@
   async function boot() {
     bindNoticeBar();
     restoreLifetime();
+    restorePrivacy();
     try {
       await loadGroups();
       await loadMailboxes();
