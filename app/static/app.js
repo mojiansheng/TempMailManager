@@ -53,6 +53,14 @@
   };
 
   /* ---------------- 工具 ---------------- */
+  // 有效期档位与中文名（与后端 config.py 保持一致；/api/health 可覆盖）
+  const LIFETIME_OPTIONS = ["10m", "30m", "1h", "3h", "6h", "24h", "3d", "7d", "15d", "30d"];
+  const LIFETIME_LABELS = {
+    "10m": "10 分钟", "30m": "30 分钟", "1h": "1 小时", "3h": "3 小时",
+    "6h": "6 小时", "24h": "24 小时", "3d": "3 天", "7d": "7 天",
+    "15d": "15 天", "30d": "30 天",
+  };
+
   const esc = (s) =>
     String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -206,7 +214,7 @@
           ${mb.last_error ? `<div class="mb-sub" style="color:#e5484d">${esc(mb.last_error)}</div>` : ""}
           <div class="mb-actions">
             <button class="mini" data-act="copy" title="复制邮箱地址">复制</button>
-            <button class="mini" data-act="renew" title="立即续期为 30 天">续期</button>
+            <button class="mini" data-act="renew" title="立即续期（可选择时长）">续期</button>
             <button class="mini ${mb.auto_renew ? "on" : ""}" data-act="auto"
                     title="${mb.auto_renew ? "点击关闭每日自动续期" : "点击开启每日自动续期"}">
               自动续期${mb.auto_renew ? "开" : "关"}
@@ -638,10 +646,28 @@
   el.btnRenew.onclick = withBusy(el.btnRenew, async () => {
     const mb = currentMailbox();
     if (!mb) return;
-    await API.renewMailbox(mb.id);
-    await loadMailboxes();
-    toast("已续期至 30 天");
+    await renewMailboxWithChoice(mb);
   });
+
+  /* 立即续期：弹窗选要续到的时长，默认「保持当前有效期」 */
+  async function renewMailboxWithChoice(mb) {
+    const options = [
+      { value: "", label: `保持当前有效期（${LIFETIME_LABELS[mb.lifetime] || mb.lifetime || "30 天"}）` },
+      ...LIFETIME_OPTIONS.map((v) => ({ value: v, label: LIFETIME_LABELS[v] || v })),
+    ];
+    const pick = await TMDialog.select({
+      title: "立即续期",
+      label: `${mb.email}\n选择续期后的有效期：`,
+      options,
+      confirmText: "续期",
+    });
+    if (pick == null) return;
+    const lifetime = pick === "" ? null : pick; // null = 后端沿用当前有效期
+    await API.renewMailbox(mb.id, lifetime);
+    await loadMailboxes();
+    const label = LIFETIME_LABELS[pick] || (lifetime ? lifetime : LIFETIME_LABELS[mb.lifetime] || mb.lifetime);
+    toast(`已续期（${label}）`);
+  }
 
   el.groupSelect.onchange = async () => {
     const mb = currentMailbox();
@@ -683,9 +709,11 @@
         toast("邮箱地址已复制");
       } else if (act === "renew") {
         actionBtn.disabled = true;
-        await API.renewMailbox(id);
-        await loadMailboxes();
-        toast("已续期至 30 天");
+        try {
+          await renewMailboxWithChoice(mb);
+        } finally {
+          actionBtn.disabled = false;
+        }
       } else if (act === "auto") {
         await API.updateMailbox(id, { auto_renew: !mb.auto_renew });
         await loadMailboxes();

@@ -109,7 +109,11 @@ def _normalize(raw: Dict[str, Any]) -> Dict[str, Any]:
     renew["daily_time"] = daily
 
     lifetime = str(renew_raw.get("lifetime", DEFAULTS["renew"]["lifetime"]))
-    renew["lifetime"] = lifetime if lifetime in LIFETIME_OPTIONS else DEFAULTS["renew"]["lifetime"]
+    # "keep" = 保持每个邮箱当前的有效期续期
+    if lifetime == "keep":
+        renew["lifetime"] = "keep"
+    else:
+        renew["lifetime"] = lifetime if lifetime in LIFETIME_OPTIONS else DEFAULTS["renew"]["lifetime"]
 
     return {"fetch": fetch, "renew": renew}
 
@@ -125,7 +129,7 @@ def _env_overrides(data: Dict[str, Any]) -> Dict[str, Any]:
                                          renew["interval_hours"])
     if _valid_time(env.get("TEMPMAIL_DAILY_TIME", "")):
         renew["daily_time"] = env["TEMPMAIL_DAILY_TIME"]
-    if env.get("TEMPMAIL_RENEW_LIFETIME") in LIFETIME_OPTIONS:
+    if env.get("TEMPMAIL_RENEW_LIFETIME") in LIFETIME_OPTIONS + ["keep"]:
         renew["lifetime"] = env["TEMPMAIL_RENEW_LIFETIME"]
     if env.get("TEMPMAIL_RENEW_ENABLED", "").lower() in ("0", "false", "no"):
         renew["enabled"] = False

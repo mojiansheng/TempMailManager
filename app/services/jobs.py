@@ -221,7 +221,10 @@ class JobManager:
                 stats = svc.refresh_mailbox(mailbox_id)
                 return {**base, "ok": True, "new": stats.get("new", 0),
                         "total": stats.get("total", 0), "error": ""}
-            svc.renew_mailbox(mailbox_id, lifetime=job.lifetime)
+            # lifetime 为 "keep" 时按每个邮箱当前的有效期续（保持原时长），
+            # 其它值统一续到指定档位
+            target_lifetime = None if job.lifetime == "keep" else job.lifetime
+            svc.renew_mailbox(mailbox_id, lifetime=target_lifetime)
             return {**base, "ok": True, "new": 0, "total": 0, "error": ""}
         except SiteError as exc:
             return {**base, "ok": False, "new": 0, "total": 0, "error": str(exc)}

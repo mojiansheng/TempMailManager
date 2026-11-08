@@ -65,23 +65,27 @@ def refresh_mailbox(mailbox_id: int) -> Dict[str, Any]:
             "lifetime": current_lifetime}
 
 
-def renew_mailbox(mailbox_id: int, lifetime: str = DEFAULT_LIFETIME) -> Dict[str, Any]:
-    """把有效期重新设为指定值，实现续期/重置计时。"""
+def renew_mailbox(mailbox_id: int, lifetime: Optional[str] = None) -> Dict[str, Any]:
+    """把有效期重新设为指定值，实现续期/重置计时。
+
+    lifetime 为 None 时沿用邮箱当前的有效期（「保持原时长续期」）。
+    """
     mailbox = store.get_mailbox_secret(mailbox_id)
     if not mailbox:
         raise SiteError("邮箱不存在。")
+    target = lifetime or mailbox.get("lifetime") or DEFAULT_LIFETIME
     client = OneTimeEmailClient(mailbox.get("cookies") or "")
     try:
-        client.update_lifetime(mailbox["uuid"], lifetime)
+        client.update_lifetime(mailbox["uuid"], target)
     except SiteError as exc:
         store.update_mailbox(mailbox_id, last_error=str(exc))
         store.add_log("error", "renew", f"续期失败：{exc}", mailbox_id)
         raise
 
-    store.update_mailbox(mailbox_id, lifetime=lifetime,
+    store.update_mailbox(mailbox_id, lifetime=target,
                          last_renewed_at=_now(), last_error="",
                          cookies=client.cookies or mailbox.get("cookies") or "")
-    store.add_log("info", "renew", f"续期成功（{lifetime}）", mailbox_id)
+    store.add_log("info", "renew", f"续期成功（{target}）", mailbox_id)
     return store.get_mailbox(mailbox_id)  # type: ignore[return-value]
 
 

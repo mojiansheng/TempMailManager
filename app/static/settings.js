@@ -63,7 +63,8 @@
     el.renewMax.value = r.gap_max_ms;
 
     if (![...el.renewLifetime.options].some((o) => o.value === r.lifetime)) {
-      el.renewLifetime.add(new Option(lifetimeText(r.lifetime), r.lifetime));
+      const label = r.lifetime === "keep" ? "保持各邮箱当前有效期" : lifetimeText(r.lifetime);
+      el.renewLifetime.add(new Option(label, r.lifetime));
     }
     el.renewLifetime.value = r.lifetime;
 
@@ -82,8 +83,9 @@
     if (health && Array.isArray(health.lifetimes)) {
       lifetimes = health.lifetimes;
       if (health.lifetime_labels) lifetimeLabels = health.lifetime_labels;
-      el.renewLifetime.innerHTML = lifetimes
-        .map((x) => `<option value="${x}">${lifetimeText(x)}</option>`).join("");
+      el.renewLifetime.innerHTML =
+        `<option value="keep">保持各邮箱当前有效期</option>` +
+        lifetimes.map((x) => `<option value="${x}">${lifetimeText(x)}</option>`).join("");
     }
     fillForm(data);
   }
@@ -121,7 +123,7 @@
           mode: el.renewMode.value,
           interval_hours: num(el.renewHours, 24),
           daily_time: el.renewTime.value || "03:00",
-          lifetime: el.renewLifetime.value || "30d",
+          lifetime: el.renewLifetime.value || "keep",
           gap_mode: el.renewGapMode.value,
           gap_ms: num(el.renewMs, 800),
           gap_min_ms: num(el.renewMin, 500),

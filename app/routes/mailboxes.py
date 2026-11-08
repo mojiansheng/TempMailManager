@@ -192,8 +192,11 @@ def move_mailboxes():
 
 @bp.post("/<int:mailbox_id>/renew")
 def renew_mailbox(mailbox_id: int):
+    """立即续期。可选 body JSON {"lifetime": "7d"} 指定续到多久，缺省用当前有效期。"""
+    payload = request.get_json(silent=True) or {}
+    lifetime = payload.get("lifetime") or None
     try:
-        mailbox = svc.renew_mailbox(mailbox_id)
+        mailbox = svc.renew_mailbox(mailbox_id, lifetime=lifetime)
     except SiteError as exc:
         return _err(str(exc), 502)
     return jsonify({"success": True, "data": mailbox})

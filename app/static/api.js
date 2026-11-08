@@ -38,7 +38,9 @@ const API = (() => {
       json("POST", "/api/mailboxes/move", { ids, group_id: groupId ?? null }),
     deleteMailbox: (id, remote = true) =>
       request(`/api/mailboxes/${id}?remote=${remote ? 1 : 0}`, { method: "DELETE" }),
-    renewMailbox: (id) => request(`/api/mailboxes/${id}/renew`, { method: "POST" }),
+    // lifetime 传 null 表示沿用邮箱当前有效期
+    renewMailbox: (id, lifetime) =>
+      json("POST", `/api/mailboxes/${id}/renew`, { lifetime: lifetime || null }),
     refreshMailbox: (id) => request(`/api/mailboxes/${id}/refresh`, { method: "POST" }),
     listEmails: (id) => request(`/api/mailboxes/${id}/emails`),
     clearEmails: (id) => request(`/api/mailboxes/${id}/emails`, { method: "DELETE" }),

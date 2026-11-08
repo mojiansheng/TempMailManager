@@ -92,7 +92,13 @@ class RenewScheduler:
 
         last_raw = state.get("last_renew_run")
         if not last_raw:
-            return True
+            # 从未自动续期过：首次启动不立即触发，等满一个间隔再跑
+            # （把基线记为现在，避免程序一启动就把所有邮箱续一遍）
+            state["last_renew_run"] = now.strftime("%Y-%m-%d %H:%M:%S")
+            _write_state(state)
+            log.info("首次巡检：暂不触发自动续期，%s 小时后开始按间隔执行",
+                     max(1, int(cfg.get("interval_hours", 24))))
+            return False
         try:
             last = datetime.strptime(last_raw, "%Y-%m-%d %H:%M:%S")
         except ValueError:
@@ -148,7 +154,7 @@ class RenewScheduler:
 
     # ---------------- 线程 ----------------
     def _run(self) -> None:
-        self._stop.wait(5)
+        self._stop.wait(self.tick)
         while not self._stop.is_set():
             try:
                 self.run_once()
