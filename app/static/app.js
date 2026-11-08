@@ -81,10 +81,27 @@
     return `${Math.floor(diff / 86400e3)} 天前`;
   }
 
+  // 有效期标记 → 总天数（用于倒计时）
+  // 小时级有效期剩余（分钟/小时档）：返回剩余分钟数，不足 1 天时用
+  function minutesLeft(mailbox) {
+    const base = parseTime(mailbox.last_renewed_at || mailbox.created_at);
+    if (!base) return null;
+    const totalMin = { "10m": 10, "30m": 30, "1h": 60, "3h": 180, "6h": 360 }[String(mailbox.lifetime || "")];
+    if (totalMin == null) return null;
+    return Math.max(0, totalMin - Math.floor((Date.now() - base.getTime()) / 60e3));
+  }
+
+  function lifetimeDays(lifetime) {
+    const map = { "10m": 0, "30m": 0, "1h": 0, "3h": 0, "6h": 0, "24h": 1,
+                  "3d": 3, "7d": 7, "15d": 15, "30d": 30 };
+    return map[String(lifetime || "30d")] ?? 30;
+  }
+
   function daysLeft(mailbox) {
     const base = parseTime(mailbox.last_renewed_at || mailbox.created_at);
     if (!base) return null;
-    const left = 30 - Math.floor((Date.now() - base.getTime()) / 86400e3);
+    const total = lifetimeDays(mailbox.lifetime);
+    const left = total - Math.floor((Date.now() - base.getTime()) / 86400e3);
     return Math.max(0, left);
   }
 
@@ -177,7 +194,7 @@
           <div class="mb-sub">
             ${renewTag}
             <span class="tag">${esc(mb.lifetime || "30d")}</span>
-            <span>剩余约 ${left == null ? "—" : left} 天</span>
+            <span>${(() => { const m = minutesLeft(mb); return m != null ? (m >= 60 ? `剩余约 ${Math.floor(m / 60)} 小时` : `剩余约 ${m} 分钟`) : (left == null ? "—" : `剩余约 ${left} 天`); })()}</span>
             ${unread}
             ${groupTag}
           </div>
@@ -281,7 +298,7 @@
     el.currentEmail.textContent = mb.email;
     el.currentMeta.innerHTML = `
       <span>有效期 ${esc(mb.lifetime || "30d")}</span>
-      <span>· 剩余约 ${daysLeft(mb) ?? "—"} 天</span>
+      <span>· ${(() => { const m = minutesLeft(mb); return m != null ? (m >= 60 ? `剩余约 ${Math.floor(m / 60)} 小时` : `剩余约 ${m} 分钟`) : `剩余约 ${daysLeft(mb) ?? "—"} 天`; })()}</span>
       <span>· ${mb.auto_renew ? "每日自动续期" : "未开启自动续期"}</span>
       <span>· 上次收信 ${relTime(mb.last_checked_at)}</span>`;
 
