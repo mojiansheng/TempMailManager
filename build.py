@@ -17,7 +17,7 @@ BUILD_DIR = ROOT / "build"
 ENTRY = ROOT / "run.py"
 APP_NAME = "TempMailManager"
 # 发布版本号：升级版本时同步改这里，并在 github/version/CHANGELOG.md 追加记录
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
