@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>临时邮箱管理 · TempMail Manager</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">✉</div>
+      <div>
+        <h1>临时邮箱管理</h1>
+        <p class="sub">有效期 10 分钟 ~ 30 天 · 自动续期 · 分组管理 · 批量导入</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn ghost" id="btn-fetch">抓取邮件</button>
+      <button class="btn ghost" id="btn-renew-all">批量续期</button>
+      <button class="btn ghost" id="btn-import">导入</button>
+      <label class="lifetime-pick" title="新建邮箱时在站点上设置的有效期，选择会被记住">
+        <span>有效期</span>
+        <select id="create-lifetime">
+          {% for value, label in lifetime_choices %}
+          <option value="{{ value }}"{% if value == default_lifetime %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="check create-flag" title="只影响新建的邮箱：勾上则新邮箱默认开启自动续期（续期频率在设置里配置）">
+        <input type="checkbox" id="create-auto-renew" checked>
+        <span>新建默认续期</span>
+      </label>
+      <button class="btn primary" id="btn-create">
+        <span class="btn-label">新建</span>
+      </button>
+      <button class="icon-btn gear" id="btn-settings" title="设置">⚙</button>
+    </div>
+  </header>
+
+  {% if db_notice %}
+  <!-- 数据库结构自动升级后的一次性提示，点「知道了」即消失（数据已自动备份） -->
+  <div class="notice-bar" id="db-notice">
+    <span class="notice-dot">!</span>
+    <div class="notice-text">
+      数据库结构已升级：<b>v{{ db_notice['from'] }}</b> → <b>v{{ db_notice['to'] }}</b>
+      {% if db_notice['backup'] %}· 升级前已备份 <code>{{ db_notice['backup'] }}</code>{% endif %}
+      <span class="notice-time">{{ db_notice['at'] }}</span>
+    </div>
+    <button class="btn ghost" id="db-notice-close">知道了</button>
+  </div>
+  {% endif %}
+
+  <main class="layout">
+    <!-- 左侧：分组 + 邮箱 -->
+    <aside class="panel sidebar">
+      <div class="panel-head">
+        <h2>分组</h2>
+        <button class="icon-btn" id="btn-new-group" title="新建分组">＋</button>
+      </div>
+      <div class="group-tree" id="group-tree">
+        <div class="empty">加载中…</div>
+      </div>
+
+      <div class="panel-head">
+        <div class="head-inline">
+          <h2>邮箱</h2>
+          <span class="scope" id="list-scope">全部</span>
+        </div>
+        <div class="head-right">
+          <span class="badge" id="mailbox-count">0</span>
+          <button class="icon-btn manage-btn" id="btn-manage"
+                  title="批量管理：勾选多个邮箱后一起移入分组">☑</button>
+        </div>
+      </div>
+      <div class="bulk-bar" id="bulk-bar" hidden>
+        <span class="bulk-count" id="bulk-count">已选 0 个</span>
+        <span class="bulk-tools">
+          <button class="mini" id="bulk-move">移入分组</button>
+          <button class="mini" id="bulk-all">全选</button>
+          <button class="mini" id="bulk-exit">退出</button>
+        </span>
+      </div>
+      <div class="list" id="mailbox-list">
+        <div class="empty">还没有邮箱，点击右上角「新建」或「导入」。</div>
+      </div>
+    </aside>
+
+    <!-- 右侧：邮件 -->
+    <section class="panel content">
+      <div class="panel-head">
+        <div class="head-main">
+          <h2 id="current-email">未选择邮箱</h2>
+          <div class="meta" id="current-meta"></div>
+        </div>
+        <div class="head-actions">
+          <select class="select-small" id="mb-group" disabled title="移动到分组">
+            <option>—</option>
+          </select>
+          <button class="btn ghost" id="btn-refresh" disabled>刷新邮件</button>
+          <button class="btn ghost" id="btn-renew" disabled>立即续期</button>
+        </div>
+      </div>
+
+      <div class="email-area">
+        <div class="mail-list" id="mail-list">
+          <div class="empty big">选择左侧的一个邮箱，查看它收到的邮件。</div>
+        </div>
+        <div class="mail-detail" id="mail-detail">
+          <div class="empty big">点击一封邮件查看内容。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- 邮件放大 -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-subject"></h3>
+        <button class="icon-btn" id="modal-close">✕</button>
+      </div>
+      <div class="modal-meta" id="modal-meta"></div>
+      <iframe id="modal-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
+    </div>
+  </div>
+
+  <!-- 备注 -->
+  <div class="modal" id="note-modal" hidden>
+    <div class="note-box">
+      <div class="modal-head">
+        <h3>邮箱备注</h3>
+        <button class="icon-btn" id="note-close">✕</button>
+      </div>
+      <div class="note-body">
+        <p class="note-target" id="note-target"></p>
+        <textarea id="note-input" rows="4" maxlength="200"
+                  placeholder="例如：注册 ChatGPT 用 / 项目 A 测试邮箱"></textarea>
+        <div class="note-count"><span id="note-count">0</span>/200</div>
+      </div>
+      <div class="note-foot">
+        <button class="btn ghost" id="note-cancel">取消</button>
+        <button class="btn primary" id="note-save">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 导入 -->
+  <div class="modal" id="import-modal" hidden>
+    <div class="import-box">
+      <div class="modal-head">
+        <h3>导入账户</h3>
+        <button class="icon-btn" id="import-close">✕</button>
+      </div>
+      <div class="import-body">
+        <div class="field-row">
+          <label for="import-group">导入到分组</label>
+          <select id="import-group"></select>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="paste">粘贴文本</button>
+          <button class="tab" data-tab="file">文本文件</button>
+          <button class="tab" data-tab="excel">Excel</button>
+        </div>
+
+        <div class="tab-pane" data-pane="paste">
+          <div class="format-head">
+            <span>完整导入格式（示例 3 个账户）</span>
+            <button class="link-btn" id="import-fill-sample">填入示例</button>
+          </div>
+          <pre class="format-sample" id="format-sample-paste"></pre>
+          <textarea id="import-text" spellcheck="false"
+                    placeholder="把账户粘贴到这里，一行一个。uuid 必填、助记词可选，顺序随意。"></textarea>
+        </div>
+
+        <div class="tab-pane" data-pane="file" hidden>
+          <p class="hint">支持 .txt / .csv。内容会读入文本框，可以先检查再导入；编码不同也不影响识别 uuid。</p>
+          <div class="format-head"><span>文件里应该长这样（示例 3 个账户）</span></div>
+          <pre class="format-sample" id="format-sample-file"></pre>
+          <input type="file" id="import-file" accept=".txt,.csv,.tsv,.md,.log">
+        </div>
+
+        <div class="tab-pane" data-pane="excel" hidden>
+          <p class="hint">支持 .xlsx。读取第一个工作表，列顺序不限，表头会自动跳过。</p>
+          <div class="template-row">
+            <a class="btn ghost small" id="import-template"
+               href="{{ url_for('mailboxes.download_import_template') }}" download>
+              下载 Excel 模板
+            </a>
+            <span class="hint-inline">模板含 2 列：UUID、助记词，以及 3 个示例账户</span>
+          </div>
+          <input type="file" id="import-excel" accept=".xlsx,.xlsm">
+        </div>
+
+        <div class="import-result" id="import-result" hidden></div>
+      </div>
+      <div class="note-foot">
+        <label class="check small">
+          <input type="checkbox" id="import-auto-renew" checked>
+          <span>导入后启用每日续期</span>
+        </label>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="import-cancel">关闭</button>
+        <button class="btn primary" id="import-run">开始导入</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 批量任务 -->
+  <div class="modal" id="job-modal" hidden>
+    <div class="job-box">
+      <div class="modal-head">
+        <h3 id="job-title">批量抓取邮件</h3>
+        <button class="icon-btn" id="job-close">✕</button>
+      </div>
+      <div class="job-body">
+        <div class="job-step" data-step="1">
+          <div class="job-toolbar">
+            <button class="link-btn" id="job-select-all">全选</button>
+            <button class="link-btn" id="job-select-none">清空</button>
+            <button class="link-btn" id="job-select-invert">反选</button>
+            <button class="link-btn" id="job-history-btn">历史任务</button>
+            <span class="job-count" id="job-pick-count">已选 0</span>
+          </div>
+          <div class="job-tree" id="job-tree"></div>
+          <p class="hint" id="job-hint"></p>
+        </div>
+
+        <div class="job-step" data-step="2" hidden>
+          <p class="hint" id="job-summary"></p>
+          <div class="job-list" id="job-confirm-list"></div>
+        </div>
+
+        <div class="job-step" data-step="4" hidden>
+          <p class="hint">每次任务都会保留在这里，点一行查看明细。</p>
+          <div class="job-history" id="job-history"></div>
+        </div>
+
+        <div class="job-step" data-step="3" hidden>
+          <div class="progress"><div class="progress-bar" id="job-bar"></div></div>
+          <div class="job-progress-text" id="job-progress-text">准备中…</div>
+          <div class="job-results" id="job-results"></div>
+        </div>
+      </div>
+      <div class="note-foot">
+        <button class="btn ghost" id="job-back" hidden>上一步</button>
+        <div class="spacer"></div>
+        <button class="btn danger" id="job-stop" hidden>终止任务</button>
+        <button class="btn ghost" id="job-cancel-btn">取消</button>
+        <button class="btn primary" id="job-next">下一步</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置 -->
+  <div class="modal" id="settings-modal" hidden>
+    <div class="settings-box">
+      <div class="modal-head">
+        <h3>设置</h3>
+        <button class="icon-btn" id="set-close">✕</button>
+      </div>
+      <div class="settings-body">
+        <section>
+          <h4>抓取邮件</h4>
+          <div class="row">
+            <label>请求间隔</label>
+            <select id="set-fetch-mode">
+              <option value="fixed">固定间隔</option>
+              <option value="random">随机间隔</option>
+            </select>
+          </div>
+          <div class="row" data-cond="set-fetch-mode:fixed">
+            <label>每个邮箱间隔</label>
+            <input type="number" id="set-fetch-ms" min="0" max="60000" step="50">
+            <span class="unit">毫秒</span>
+          </div>
+          <div class="row" data-cond="set-fetch-mode:random">
+            <label>随机范围</label>
+            <input type="number" id="set-fetch-min" min="0" max="60000" step="50">
+            <span class="unit">~</span>
+            <input type="number" id="set-fetch-max" min="0" max="60000" step="50">
+            <span class="unit">毫秒</span>
+          </div>
+          <p class="hint">抓信已改为手动触发：点顶栏「抓取邮件」，勾选邮箱后批量执行，不再后台轮询。</p>
+        </section>
+
+        <section>
+          <h4>到期续期</h4>
+          <div class="row">
+            <label>启用自动续期调度</label>
+            <label class="switch"><input type="checkbox" id="set-renew-enabled"><span></span></label>
+          </div>
+          <div class="row">
+            <label>触发方式</label>
+            <select id="set-renew-mode">
+              <option value="interval">每隔 N 小时</option>
+              <option value="daily">每天固定时间</option>
+            </select>
+          </div>
+          <div class="row" data-cond="set-renew-mode:interval">
+            <label>间隔</label>
+            <input type="number" id="set-renew-hours" min="1" max="720">
+            <span class="unit">小时</span>
+          </div>
+          <div class="row" data-cond="set-renew-mode:daily">
+            <label>每天触发时间</label>
+            <input type="time" id="set-renew-time">
+          </div>
+          <div class="row">
+            <label>续期时长</label>
+            <select id="set-renew-lifetime"></select>
+          </div>
+          <div class="row">
+            <label>续期请求间隔</label>
+            <select id="set-renew-gap-mode">
+              <option value="fixed">固定间隔</option>
+              <option value="random">随机间隔</option>
+            </select>
+          </div>
+          <div class="row" data-cond="set-renew-gap-mode:fixed">
+            <label>每个邮箱间隔</label>
+            <input type="number" id="set-renew-ms" min="0" max="60000" step="50">
+            <span class="unit">毫秒</span>
+          </div>
+          <div class="row" data-cond="set-renew-gap-mode:random">
+            <label>随机范围</label>
+            <input type="number" id="set-renew-min" min="0" max="60000" step="50">
+            <span class="unit">~</span>
+            <input type="number" id="set-renew-max" min="0" max="60000" step="50">
+            <span class="unit">毫秒</span>
+          </div>
+          <p class="hint" id="set-renew-status"></p>
+          <p class="hint">只对勾选了自动续期的邮箱生效；邮箱卡片上的「自动续期开/关」即这个开关。</p>
+        </section>
+      </div>
+      <div class="note-foot">
+        <button class="btn ghost" id="set-reset">恢复默认</button>
+        <button class="btn ghost" id="set-logs">运行日志</button>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="set-cancel">取消</button>
+        <button class="btn primary" id="set-save">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 日志中心 -->
+  <div class="modal" id="logs-modal" hidden>
+    <div class="logs-box">
+      <div class="modal-head">
+        <h3>日志中心</h3>
+        <button class="icon-btn" id="logs-close">✕</button>
+      </div>
+
+      <div class="logs-tabs tabs">
+        <button class="tab active" data-kind="business">业务</button>
+        <button class="tab" data-kind="system">系统</button>
+        <button class="tab" data-kind="access">前端请求</button>
+        <button class="tab" data-kind="http">外部请求</button>
+      </div>
+
+      <div class="logs-toolbar">
+        <select id="logs-level">
+          <option value="">全部级别</option>
+          <option value="info">信息</option>
+          <option value="warn">警告</option>
+          <option value="error">错误</option>
+        </select>
+        <input id="logs-keyword" type="text" placeholder="按路径 / 内容搜索">
+        <button class="link-btn" id="logs-refresh">刷新</button>
+        <span class="job-count" id="logs-count"></span>
+      </div>
+
+      <div class="logs-list" id="logs-list"></div>
+
+      <div class="note-foot">
+        <button class="btn danger" id="logs-clear">清空当前日志</button>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="logs-cancel">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='api.js') }}"></script>
+  <script src="{{ url_for('static', filename='dialog.js') }}"></script>
+  <script src="{{ url_for('static', filename='groups.js') }}"></script>
+  <script src="{{ url_for('static', filename='importer.js') }}"></script>
+  <script src="{{ url_for('static', filename='jobs.js') }}"></script>
+  <script src="{{ url_for('static', filename='settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='logs.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
