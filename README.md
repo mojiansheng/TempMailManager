@@ -33,8 +33,8 @@
 
 不想装 Python，直接下打包好的单文件 exe：
 
-- 最新版：[Releases](https://github.com/mojiansheng/TempMailManager/releases/latest)
-- 文件名：`TempMailManager-vx.x.x-win64.exe`，双击运行后自动打开 <http://127.0.0.1:8720/>
+- 最新版：[Releases](https://github.com/mojiansheng/TempMailManager/releases/latest)（当前 v1.1.0）
+- 文件名：`TempMailManager-v1.1.0-win64.exe`，双击运行后自动打开 <http://127.0.0.1:8720/>
 - 数据保存在 exe 同级的 `data/tempmail.db`；升级只需替换 exe，数据库会在启动时自动升级结构，建议先备份 `data/`
 - 首次运行若被 SmartScreen 拦截，点「更多信息 → 仍要运行」（exe 未做代码签名）
 - 每个版本改了什么见 [Releases 说明](https://github.com/mojiansheng/TempMailManager/releases)
