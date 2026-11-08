@@ -211,18 +211,12 @@ body {
   line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;   /* 最多一行，全文看「改备注」弹窗 */
   word-break: break-all;
 }
 /* 收起态：只显示「备注（点击查看）」，不泄露内容 */
 .mb-note.collapsed {
   cursor: pointer;
-  display: block;
-  -webkit-line-clamp: unset;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   opacity: .85;
 }
 .mb-note.collapsed:hover { background: #fff6dc; }

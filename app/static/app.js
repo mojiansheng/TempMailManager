@@ -658,8 +658,9 @@
   const PRIVACY_KEY = "tm.privacy";
 
   function applyPrivacyState() {
+    // 文案不变、只切高亮，避免按钮宽度变化引起整排按钮跳动
     el.btnPrivacy.classList.toggle("active", state.privacy);
-    el.btnPrivacy.textContent = state.privacy ? "隐私显示·开" : "隐私显示";
+    el.btnPrivacy.textContent = "隐私显示";
     el.btnPrivacy.title = state.privacy
       ? "已开启：邮箱地址只显示前 5 位和后 5 位，点击关闭"
       : "开启后邮箱地址只显示前 5 位和后 5 位，中间打码";
