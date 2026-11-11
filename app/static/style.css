@@ -622,6 +622,7 @@ body {
 .row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; font-size: 12.5px; }
 .row[hidden] { display: none; }
 .row > label:first-child { width: 118px; color: var(--muted); flex-shrink: 0; }
+.row-hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; opacity: .85; }
 .row input[type="number"], .row input[type="time"], .row select {
   border: 1px solid var(--border);
   border-radius: 7px;

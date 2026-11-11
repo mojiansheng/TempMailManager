@@ -33,7 +33,13 @@ def create_job():
         return jsonify({"success": False, "error": message}), 400
 
     try:
-        job = jobs.manager.create(kind, targets)
+        # 续期任务按设置里的「自动续期时长」续（可能是 keep=保持各邮箱当前有效期）；
+        # 抓信任务不涉及 lifetime
+        lifetime = None
+        if kind == "renew":
+            from .. import settings_store
+            lifetime = settings_store.load()["renew"].get("lifetime", "keep")
+        job = jobs.manager.create(kind, targets, lifetime=lifetime or "keep")
     except jobs.JobBusy as exc:
         return jsonify({"success": False, "error": str(exc)}), 409
 
