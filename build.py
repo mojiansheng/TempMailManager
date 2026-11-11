@@ -5,7 +5,7 @@
     python build.py --standalone   # 目录模式，启动更快
     python build.py --clean        # 先清理 build/ 再打包
 
-产物：build/run.dist/run.exe（单文件）或 build/run.dist/ 目录
+产物：build/TempMailManager.exe（单文件）或 build/run.dist/ 目录（--standalone）
 """
 
 import subprocess

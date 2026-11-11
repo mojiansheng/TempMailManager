@@ -192,9 +192,17 @@ def move_mailboxes():
 
 @bp.post("/<int:mailbox_id>/renew")
 def renew_mailbox(mailbox_id: int):
-    """立即续期。可选 body JSON {"lifetime": "7d"} 指定续到多久，缺省用当前有效期。"""
+    """立即续期单个邮箱。
+
+    body 可选 {"lifetime": "7d"}：指定续到多久；不传或传 null 表示
+    沿用该邮箱当前的有效期。只会操作路径里的这一个邮箱。
+    """
     payload = request.get_json(silent=True) or {}
     lifetime = payload.get("lifetime") or None
+    if lifetime is not None:
+        lifetime = str(lifetime)
+        if lifetime not in LIFETIME_OPTIONS:
+            return _err(f"不支持的有效期：{lifetime}")
     try:
         mailbox = svc.renew_mailbox(mailbox_id, lifetime=lifetime)
     except SiteError as exc:

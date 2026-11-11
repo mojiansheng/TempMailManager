@@ -5,5 +5,6 @@ build/
 *.log
 
 # 发布产物：exe 体积大，不进仓库，只在 GitHub Release 页面上传
-# 本地保留 version/ 便于打包后集中投放，更新日志见 version/CHANGELOG.md
-version/
+# version/ 下只保留更新日志，exe 不进仓库
+version/*
+!version/CHANGELOG.md

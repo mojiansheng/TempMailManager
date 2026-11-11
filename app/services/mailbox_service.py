@@ -68,7 +68,8 @@ def refresh_mailbox(mailbox_id: int) -> Dict[str, Any]:
 def renew_mailbox(mailbox_id: int, lifetime: Optional[str] = None) -> Dict[str, Any]:
     """把有效期重新设为指定值，实现续期/重置计时。
 
-    lifetime 为 None 时沿用邮箱当前的有效期（「保持原时长续期」）。
+    lifetime 为 None 时沿用该邮箱当前的有效期（「保持原时长续期」），
+    只影响传入的这一个邮箱。
     """
     mailbox = store.get_mailbox_secret(mailbox_id)
     if not mailbox:
