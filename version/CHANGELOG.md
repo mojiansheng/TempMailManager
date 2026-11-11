@@ -17,9 +17,9 @@ TempMailManager-v<版本>-win64.exe
 
 ---
 
-## v1.1.1 — 2026-11-11（待发布）
+## v1.1.1 — 2026-11-11
 
-发布文件：待打包 `TempMailManager-v1.1.1-win64.exe`
+发布文件：`TempMailManager-v1.1.1-win64.exe`
 
 修复版：单个邮箱续期不再丢掉所选时长。
 
